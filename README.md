@@ -24,3 +24,10 @@ further transform filtered data before classification.\
 This algorithm will have to be in-
 tegrated within **sklearn** so you’ll be able to use sklearn tools for classification and score validation.
 
+## Usage:
+
+1. Visualize:
+```bash
+python visualize.py
+```
+And for more info, look at the notebook "visualize.ipynb"
