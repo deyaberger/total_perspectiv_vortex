@@ -26,8 +26,8 @@ tegrated within **sklearn** so you’ll be able to use sklearn tools for classif
 
 ## Usage:
 
-1. Visualize:
+1. Parse Data::
 ```bash
-python visualize.py
+python data_parsing.py
 ```
-And for more info, look at the notebook "visualize.ipynb"
+And for more info, look at the notebook "vizualize.ipynb"

@@ -1,3 +1,5 @@
+"""EEG Motor Experiments dataset parsing with MNE library."""
+import argparse
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
 import numpy as np
@@ -95,9 +97,34 @@ class Parser():
         self.raw.filter(start, end)
 
 
+def get_args():
+    """Get program arguments."""
+    runs_dict = {
+        1: [1],
+        2: [2],
+        3: [3, 7, 11],
+        4: [4, 8, 12],
+        5: [5, 9, 13],
+        6: [6, 10, 14],
+    }
+    parser = argparse.ArgumentParser(description='Parse EEG Motor Experiment dataset')
+    parser.add_argument('--show_plots', action='store_true',
+                        help='Show plots at each step of the data parsing')
+    parser.add_argument('--data_path', default="./mne_data",
+                        help='Specify the path to MNE data')
+    parser.add_argument('--subject', default=1,
+                        help='Specify number of the subject you want to analyze')
+    parser.add_argument('--runs', default=3, choices=[1, 2, 3, 4, 5, 6],
+                        help=f"Specify this list of runs you want to analyze, cf this dictionnary: {runs_dict}")
+    args = parser.parse_args()
+    args.runs = runs_dict[args.runs]
+    return args
+
+
 if __name__ == '__main__':
-    show_plots = True
-    parser = Parser(subject=1, runs=[3, 7, 11], mne_path="./mne_data")
+    args = get_args()
+    show_plots = args.show_plots
+    parser = Parser(subject=args.subject, runs=args.runs, mne_path=args.data_path)
     parser.load_data()
     montage = parser.select_montage('biosemi64')
     if show_plots:
