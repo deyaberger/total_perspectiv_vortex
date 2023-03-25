@@ -1,19 +1,11 @@
 """EEG Motor Experiments dataset parsing with MNE library."""
 import argparse
 import matplotlib.pyplot as plt
-import matplotlib.colors as mcolors
-import numpy as np
 
-from sklearn.pipeline import Pipeline
-from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
-from sklearn.model_selection import ShuffleSplit, cross_val_score
-
-from mne import Epochs, pick_types, events_from_annotations
-import mne.channels as channels
+from mne import pick_types, events_from_annotations
 from mne.channels import make_standard_montage
 from mne.io import concatenate_raws, read_raw_edf
 from mne.datasets import eegbci
-from mne.decoding import CSP
 from mne import set_log_level
 set_log_level("WARNING")
 
@@ -31,10 +23,10 @@ class Visualizer():
         plt.show()
 
     @classmethod
-    def show_raw_data(self, raw, noiiice=False):
+    def show_raw_data(self, raw, smooth=False):
         """Plot row data (Volts of signals for each channel along the time)."""
         print("Plotting raw data\n")
-        if noiiice:
+        if smooth:
             raw.plot(scalings=dict(eeg=1e-4), title="Raw Data")
         else:
             raw.plot(title="Raw Data")
@@ -58,6 +50,7 @@ class Parser():
         self.subject = kwargs['subject']
         self.runs = kwargs['runs']
         self.mne_path = kwargs['mne_path']
+        self.events = None
 
     def load_data(self):
         """Load data."""
@@ -77,24 +70,36 @@ class Parser():
         """Compute power spectral density (PSD)."""
         self.raw.compute_psd()
 
-    def reduce_noise(self, noisy_freq, noisy_channels):
+    def reduce_noise(self, noisy_freq=None, noisy_channels="bads"):
         """Reducing noise to better analyse the data.
 
         - noisy_freq = Power line noise is a type of interference that can be picked up by EEG electrodes due to
                         the electrical activity of nearby power lines
         - noisy_channels = Channels that do are not related to the motion cortex.
         """
-        print("Reducing noise\n")
-        self.raw.notch_filter(noisy_freq, method="iir")
+        print("Reducing noise:")
+        if noisy_freq is not None:
+            print(f"Removing frequency {noisy_freq}")
+            self.raw.notch_filter(noisy_freq, method="iir")
+        print(f"Removing bad or noisy channels: {noisy_channels}\n")
         picks = pick_types(self.raw.info, eeg=True,
                            exclude=noisy_channels)
         self.raw.pick(picks)
+        return picks
 
     def focus_and_clean(self, significant_frequencies):
         """Focus on the frequencies that are relevant for motor imagery."""
         print("Focussing on significant frequencies\n")
         start, end = significant_frequencies
         self.raw.filter(start, end)
+
+    def get_events(self, event_id=None):
+        """Get events."""
+        print("Getting events from annotations\n")
+        if event_id:
+            self.events, self.event_id = events_from_annotations(self.raw, event_id=event_id)
+        else:
+            self.events, self.event_id = events_from_annotations(self.raw)
 
 
 def get_args():
@@ -130,7 +135,7 @@ if __name__ == '__main__':
     if show_plots:
         Visualizer.show_montage(montage)
         Visualizer.show_raw_data(parser.raw)
-        Visualizer.show_raw_data(parser.raw, noiiice=True)
+        Visualizer.show_raw_data(parser.raw, smooth=True)
         Visualizer.show_psd(parser.raw)
     if not show_plots:
         parser.compute_psd()
