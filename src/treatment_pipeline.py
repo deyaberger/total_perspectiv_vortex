@@ -1,6 +1,8 @@
 """Processing EEG data pipeline."""
 from tqdm import tqdm
 import pandas as pd
+import os
+import joblib
 import logging
 
 from sklearn.pipeline import Pipeline
@@ -18,14 +20,10 @@ logger.setLevel(level=logging.INFO)
 
 class Treatment():
     def __init__(self, args):
-        # TODO replace subjects from 1 to 109:
-        self.subjects = [args.subject] if args.train or args.predict else range(1, 10)
+        # TODO replace subjects from 1 to 109 and runs to 0, 4:
+        self.subjects = [args.subject] if args.train or args.predict else range(1, 109)
         self.run_idxs = [args.run_idx] if args.train or args.predict else range(0, 4)
         self.runs = [x['runs'] for i, x in enumerate(tasks) if i in self.run_idxs]
-        if args.predict:
-            self.predict()
-        else:
-            self.train()
 
     def build_pipe(self, lda_name: str = 'classic', csp_components: int = 4) -> Pipeline:
         if (lda_name == 'shrimp'):
@@ -36,6 +34,14 @@ class Treatment():
         pipeline = Pipeline([("CSP", csp), ("LDA", lda)])
         return pipeline
 
+
+class Train(Treatment):
+    def __init__(self, args):
+        super().__init__(args)
+        self.training_data = None
+        self.pipe = None
+        self.preload_models = True
+        self.train()
 
     def cross_val_pipeline(self, pipeline, epochs) -> float:
         targets = epochs.events[:, -1]
@@ -56,6 +62,23 @@ class Treatment():
         logger.info(f"trained_pipeline_score: {score:.2f}")
         return pipeline
 
+    def save_pipeline_to_disk(self, pipe: Pipeline, dir: str, run_id: int, subject: int, parser):
+        sub_dir = f"run_{run_id}"
+        parser.create_dir_if_not_exists(dir, sub_dir)
+        filename = f"S{subject:03d}.save"
+        complete_path = f'{dir}/{sub_dir}/{filename}'
+        joblib.dump(pipe, complete_path)
+        logger.info(f"Saved pipeline to: {complete_path}")
+
+    def get_pretrained_model(self, dir, run_id, subject):
+        sub_dir = f"run_{run_id}"
+        filename = f"S{subject:03d}.save"
+        complete_path = f'{dir}/{sub_dir}/{filename}'
+        if not os.path.exists(complete_path):
+            return None
+        pipe = joblib.load(complete_path)
+        return pipe
+
     def train(self):
         training_data = pd.DataFrame(columns=['subject', 'task_number', 'cross_val_score'])
         for run_id in self.run_idxs:
@@ -66,8 +89,13 @@ class Treatment():
                 parser = Parser(subject=subject, run=run, mne_path="./mne_data", run_id=run_id)
                 parser.motion_preprocessing(labels)
                 epochs = parser.get_epochs(epochs_dir="./epochs", save=True, preload=True)
-                pipe = self.build_pipe(lda_name='classic', csp_components=10)
-                cross_score = self.cross_val_pipeline(pipe, epochs)
+                if self.preload_models:
+                    self.pipe = self.get_pretrained_model("./models", run_id, subject)
+                if self.pipe is None or self.preload_models is False:
+                    self.pipe = self.build_pipe(lda_name='classic', csp_components=4)
+                    self.pipe = self.train_pipeline(self.pipe, epochs, test_size=0.1)
+                    self.save_pipeline_to_disk(self.pipe, "./models", run_id, subject, parser)
+                cross_score = self.cross_val_pipeline(self.pipe, epochs)
                 logger.info(f"Run:{run},\t\tsubject:{subject},\t\tCross validation average:{cross_score:.2f}")
                 model_metrics = {
                     'subject': subject,
@@ -76,13 +104,12 @@ class Treatment():
                 }
                 metrics = pd.DataFrame(model_metrics, index=[0])
                 training_data = pd.concat([training_data, metrics])
+        parser.create_dir_if_not_exists("./results")
         training_data.to_csv("./results/training.csv")
-
-    def predict(self):
-        pass
-
+        self.training_data = training_data
 
 
 if __name__ == "__main__":
     args = get_tpv_args()
-    T = Treatment(args)
+    if args.train or not args.predict:
+        T = Train(args)

@@ -47,7 +47,7 @@ def get_tpv_args():
     group = parser.add_mutually_exclusive_group(required=False)
     group.add_argument('--train', action='store_true', help='Train the model')
     group.add_argument('--predict', action='store_true', help='Make predictions using the model')
-    parser.add_argument("--subject", type=int, choices=range(0, 109), metavar="int <= 109",
+    parser.add_argument("--subject", type=int, choices=range(1, 109), metavar="int > 0 && int <= 109",
                         help="Choose the number of the subject ",
                         required=('--train' in sys.argv or '--predict' in sys.argv))
     infos = f"{[{str(index) : str(x['name'])} for index, x, in enumerate(tasks)]}"

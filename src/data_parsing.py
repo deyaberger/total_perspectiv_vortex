@@ -139,11 +139,11 @@ class Parser():
         self.filename = f"S{subject_nb:03d}_epo.fif"
         return f"{self.epochs_dir}/{self.epochs_run_dir}/{self.filename}"
 
-    def create_epochs_dir_if_not_exists(self):
-        if not os.path.exists(self.epochs_dir):
-            os.mkdir(self.epochs_dir)
-        if not os.path.exists(f"{self.epochs_dir}/{self.epochs_run_dir}"):
-            os.mkdir(f"{self.epochs_dir}/{self.epochs_run_dir}")
+    def create_dir_if_not_exists(self, dir: str, sub_dir: str = None):
+        if not os.path.exists(dir):
+            os.mkdir(dir)
+        if sub_dir and not os.path.exists(f"{dir}/{sub_dir}"):
+            os.mkdir(f"{dir}/{sub_dir}")
 
     def get_epochs(self,
                    baseline: float = None,
@@ -162,7 +162,7 @@ class Parser():
                 self.epochs = Epochs(self.raw, self.events, self.event_id, tmin, tmax, proj=True, picks=self.picks, preload=True)
             if save and epochs_path is not None:
                 logger.info(f"Saving epochs to: {epochs_path}")
-                self.create_epochs_dir_if_not_exists()
+                self.create_dir_if_not_exists(self.epochs_dir, self.epochs_run_dir)
                 self.epochs.save(epochs_path, overwrite=True)
         return self.epochs
 
