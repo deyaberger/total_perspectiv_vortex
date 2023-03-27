@@ -1,5 +1,6 @@
 """Processing EEG data pipeline."""
 from tqdm import tqdm
+import numpy as np
 import pandas as pd
 import os
 import joblib
@@ -34,6 +35,15 @@ class Treatment():
         pipeline = Pipeline([("CSP", csp), ("LDA", lda)])
         return pipeline
 
+    def get_pretrained_model(self, dir, run_id, subject):
+        sub_dir = f"run_{run_id}"
+        filename = f"S{subject:03d}.save"
+        complete_path = f'{dir}/{sub_dir}/{filename}'
+        if not os.path.exists(complete_path):
+            return None
+        pipe = joblib.load(complete_path)
+        return pipe
+
 
 class Train(Treatment):
     def __init__(self, args):
@@ -46,7 +56,8 @@ class Train(Treatment):
     def cross_val_pipeline(self, pipeline, epochs) -> float:
         targets = epochs.events[:, -1]
         epochs_data = epochs.copy().crop(tmin=1.0, tmax=4.0).get_data() # They do this cropping on MNE website. Why ?
-        scores = cross_val_score(pipeline, epochs_data, targets, cv=ShuffleSplit(10, test_size=0.2), n_jobs=None)
+        # TODO: keep or remove random state?
+        scores = cross_val_score(pipeline, epochs_data, targets, cv=ShuffleSplit(10, test_size=0.2, random_state=42), n_jobs=None)
         return scores.mean()
 
 
@@ -69,15 +80,6 @@ class Train(Treatment):
         complete_path = f'{dir}/{sub_dir}/{filename}'
         joblib.dump(pipe, complete_path)
         logger.info(f"Saved pipeline to: {complete_path}")
-
-    def get_pretrained_model(self, dir, run_id, subject):
-        sub_dir = f"run_{run_id}"
-        filename = f"S{subject:03d}.save"
-        complete_path = f'{dir}/{sub_dir}/{filename}'
-        if not os.path.exists(complete_path):
-            return None
-        pipe = joblib.load(complete_path)
-        return pipe
 
     def train(self):
         training_data = pd.DataFrame(columns=['subject', 'task_number', 'cross_val_score'])
@@ -109,7 +111,69 @@ class Train(Treatment):
         self.training_data = training_data
 
 
+class Predict(Treatment):
+    def __init__(self, args):
+        super().__init__(args)
+        if len(self.subjects) != 1 or len(self.run_idxs) != 1:
+            logger.error("Predict class take one subject and one run only")
+        self.run_id = self.run_idxs[0]
+        self.subject = self.subjects[0]
+        self.predict()
+
+
+    def predict_epochs(self, pipe, epochs):
+        epochs_data = epochs.get_data()
+        events = epochs.events
+        right = 0
+        wrong = 0
+        for i, event in enumerate(events):
+            last_time = event[0]
+            right_answer = event[2]
+            prediction  = pipe.predict(epochs_data[i, None, :, :])[0]
+            right += prediction == right_answer
+            wrong += prediction != right_answer
+
+        print(f"{right = }\n{wrong = }\n{right/(right + wrong) = }")
+
+
+    def predict_epochs_proba(self, pipe, epochs, threshold: float):
+        epochs_data = epochs.get_data()
+        events = epochs.events
+        right = 0
+        wrong = 0
+        predicted = 0
+        ignored = 0
+        ignored = 0
+        for i, event in enumerate(events):
+            right_answer = event[2]
+
+            prediction_distribution = pipe.predict_proba(epochs_data[i, None, :, :])
+            if np.max(prediction_distribution) > threshold:
+                prediction = np.argmax(prediction_distribution) + 1
+                right += prediction == right_answer
+                wrong += prediction != right_answer
+                predicted += 1
+            else:
+                ignored += 1
+
+        print(f"{right = }\n{wrong = }\n{right/(right + wrong) = }\n{predicted / (predicted + ignored) = }")
+
+    def predict(self):
+        run = tasks[self.run_id]['runs']
+        labels = tasks[self.run_id]['labels']
+        parser = Parser(subject=self.subject, run=run, mne_path="./mne_data", run_id=self.run_id)
+        parser.motion_preprocessing(labels)
+        epochs = parser.get_epochs(epochs_dir="./epochs", save=True, preload=True)
+        trained_pipeline = self.get_pretrained_model("./models", self.run_id, self.subject)
+        if trained_pipeline is None:
+            logger.error(f"No model was trained to make prediction for run_id={self.run_id}, subject={self.subject}")
+            return
+        # TODO : choose with or without threshold
+        self.predict_epochs_proba(trained_pipeline, epochs, 0.7)
+
 if __name__ == "__main__":
     args = get_tpv_args()
-    if args.train or not args.predict:
+    if args.predict:
+        T = Predict(args)
+    else:
         T = Train(args)
