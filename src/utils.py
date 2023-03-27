@@ -2,37 +2,42 @@
 import argparse
 import sys
 
-EXPERIMENTS = [
+LR = 'L vs R'
+HAND_FEET = 'Hands vs feet'
+
+tasks = [
     {
-        "description": "move fists",
+        "name": "Real moving hands",
+        "real": True,
+        "type": LR,
         "runs": [3, 7, 11],
-        "mapping": {0: "rest", 1: "left fist", 2: "right fist"},
+        "labels": {0: "rest", 1: "left hand", 2: "right hand"},
+        "events": {"T0": 0, "T1": 1, "T2": 2},
     },
     {
-        "description": "imagine movement of fists",
+        "name": "Imagine moving hands",
+        "real": False,
+        "type": LR,
         "runs": [4, 8, 12],
-        "mapping": {0: "rest", 1: "imagine left fist", 2: "imagine right fist"},
+        "labels": {0: "rest", 1: "imagine left hand", 2: "imagine right hand"},
+        "events": {"T0": 0, "T1": 1, "T2": 2},
     },
     {
-        "description": "move fists and feets",
+        "name": "move hands vs feet",
+        "real": True,
+        "type": HAND_FEET,
         "runs": [5, 9, 13],
-        "mapping": {0: "rest", 1: "both fists", 2: "both feets"},
+        "labels": {0: "rest", 1: "hands", 2: "feet"},
+        "events": {"T0": 0, "T1": 1, "T2": 2},
     },
     {
-        "description": "imagine movement of fists and feets",
+        "name": "imagine hands vs feet",
+        "real": False,
+        "type": HAND_FEET,
         "runs": [6, 10, 14],
-        "mapping": {0: "rest", 1: "imagine both fists", 2: "imagine both feets"},
-    },
-    {
-        "description": "movement (real or imagine) of fists",
-        "runs": [3, 7, 11, 4, 8, 12],
-        "mapping": {0: "rest", 1: "left fist", 2: "right fist"},
-    },
-    {
-        "description": "movement (real or imagine) of fists or feet",
-        "runs": [5, 9, 13, 6, 10, 14],
-        "mapping": {0: "rest", 1: "both fists", 2: "both feets"},
-    },
+        "labels": {0: "rest", 1: "imagine both hands", 2: "imagine both feet"},
+        "events": {"T0": 0, "T1": 1, "T2": 2},
+    }
 ]
 
 
@@ -45,14 +50,10 @@ def get_tpv_args():
     parser.add_argument("--subject", type=int, choices=range(0, 109), metavar="int <= 109",
                         help="Choose the number of the subject ",
                         required=('--train' in sys.argv or '--predict' in sys.argv))
-    parser.add_argument("--run_idx", type=int, choices=range(0, 6),
-                        help="""Choose the index corresponding to the experiment you want to analyze.
-                        {0: move fists},
-                        {1: imagine movement of fists},
-                        {2: move fists and feets},
-                        {3: imagine movement of fists and feets},
-                        {4: movement (real or imagine) of fists},
-                        {5: movement (real or imagine) of fists or feet},
+    infos = f"{[{str(index) : str(x['name'])} for index, x, in enumerate(tasks)]}"
+    parser.add_argument("--run_idx", type=int, choices=range(0, 4),
+                        help=f"""Choose the index corresponding to the experiment you want to analyze.
+                        {infos}
                         """,
                         required=('--train' in sys.argv or '--predict' in sys.argv))
     return parser.parse_args()

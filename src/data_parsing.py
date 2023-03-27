@@ -1,8 +1,9 @@
 """EEG Motor Experiments dataset parsing with MNE library."""
 import argparse
 import matplotlib.pyplot as plt
+from typing import List
 
-from mne import pick_types, events_from_annotations
+from mne import Epochs, pick_types, events_from_annotations, annotations_from_events
 from mne.channels import make_standard_montage
 from mne.io import concatenate_raws, read_raw_edf
 from mne.datasets import eegbci
@@ -45,12 +46,17 @@ class Visualizer():
 class Parser():
     """Class to Parse MNE data."""
 
+    noisy_channels = ['AF7', 'AF3', 'AFz', 'AF4', 'AF8', 'Fp1', 'Fpz', 'Fp2', 'P7', 'P5', 'P3', 'P1', 'P2', 'P4', 'P6',
+                            'P8', 'PO7', 'PO3', 'POz', 'PO4', 'PO8', 'Iz']
+
     def __init__(self, **kwargs):
         """Initialize data path, subject number and run task."""
         self.subject = kwargs['subject']
         self.runs = kwargs['runs']
         self.mne_path = kwargs['mne_path']
         self.events = None
+        self.annotations = None
+        self.epochs = None
 
     def load_data(self):
         """Load data."""
@@ -100,6 +106,28 @@ class Parser():
             self.events, self.event_id = events_from_annotations(self.raw, event_id=event_id)
         else:
             self.events, self.event_id = events_from_annotations(self.raw)
+
+    def get_annotations(self, labels=None):
+        """Get annotations."""
+        print("Getting annotations from events\n")
+        if labels:
+            self.annotations = annotations_from_events(events=self.events, event_desc=labels, sfreq=self.raw.info["sfreq"])
+        else:
+            self.annotations = annotations_from_events(events=self.events, sfreq=self.raw.info["sfreq"])
+
+    def get_epochs(self, labels, baseline: float = None, tmin: float = -1., tmax: float = 4.0, montage_name: str = 'standard_1005', noisy_channels: List[str] = noisy_channels, noisy_freq: int = 60):
+        self.load_data()
+        self.select_montage(montage_name)
+        self.reduce_noise(noisy_freq, noisy_channels)
+        picks = self.reduce_noise()
+        self.focus_and_clean(significant_frequencies=(7.0, 32.0))
+        self.get_events(labels)
+        if baseline:
+            self.epochs = Epochs(self.raw, self.events, self.event_id, tmin, tmax, proj=True, picks=picks, baseline=(tmin, tmin + 1.), preload=True)
+        else:
+            self.epochs = Epochs(self.raw, self.events, self.event_id, tmin, tmax, proj=True, picks=picks, preload=True)
+        return self.epochs
+
 
 
 def get_args():
