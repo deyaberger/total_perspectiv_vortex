@@ -2,6 +2,8 @@
 venv
 mne_data/*
 **/mne_data/*
+**/epochs/*
+**/models/*
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
