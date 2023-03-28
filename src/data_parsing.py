@@ -13,7 +13,7 @@ from mne import set_log_level
 set_log_level("WARNING")
 
 logger = logging.getLogger("data_parsing")
-logger.setLevel(level=logging.WARNING)
+logging.basicConfig(level=logging.WARNING)
 
 class Visualizer():
     """Class to Visualize MNE data."""
@@ -126,8 +126,9 @@ class Parser():
                    noisy_channels: List[str] = noisy_channels, noisy_freq: int = 60):
         self.load_data()
         self.select_montage(montage_name)
-        self.get_events()
-        self.get_annotations(labels)
+        # TODO: remove parenthesis if it doesn change
+        self.get_events(dict(T1=1, T2=2))
+        self.get_annotations({1: labels[1], 2: labels[2]})
         self.reduce_noise(noisy_freq, noisy_channels)
         self.picks = self.reduce_noise()
         self.focus_and_clean(significant_frequencies=(7.0, 32.0))
@@ -179,6 +180,8 @@ def get_args():
         6: [6, 10, 14],
     }
     parser = argparse.ArgumentParser(description='Parse EEG Motor Experiment dataset')
+    parser.add_argument("--verbose", action="store_true",
+                        help="Show details of each functions.")
     parser.add_argument('--show_plots', action='store_true',
                         help='Show plots at each step of the data parsing')
     parser.add_argument('--data_path', default="./mne_data",
@@ -195,6 +198,8 @@ def get_args():
 if __name__ == '__main__':
     args = get_args()
     show_plots = args.show_plots
+    if args.verbose:
+        logger.setLevel(level=logging.INFO)
     parser = Parser(subject=args.subject, run=args.run, mne_path=args.data_path)
     parser.load_data()
     montage = parser.select_montage('biosemi64')

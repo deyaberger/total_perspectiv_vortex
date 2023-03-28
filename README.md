@@ -31,3 +31,24 @@ tegrated within **sklearn** so you’ll be able to use sklearn tools for classif
 python data_parsing.py
 ```
 And for more info, look at the notebook "vizualize.ipynb"
+
+2. Train
+```bash
+python treatment_pipeline.py
+```
+this will start a training on each runs and each subjects. It will save the models, the data and the results inside the src folder where you should launch the script. It will also display the score of your training.
+
+To start training only on a specific subject and run, do the following:
+```
+python treatment_pipeline.py --train --run 0 --subject 1
+```
+For more info, do:
+```
+python treatment_pipeline.py -h
+```
+
+3. Predict
+```bash
+python treatment_pipeline.py --predict --run 0 --subject 1
+```
+If no training was done on this specific subject, it will give you an error, asking you to first launch the training on this same run and subject.

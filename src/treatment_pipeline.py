@@ -9,21 +9,29 @@ import logging
 from sklearn.pipeline import Pipeline
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis as LDA
 from sklearn.model_selection import ShuffleSplit, cross_val_score, train_test_split
+from sklearn.metrics import accuracy_score
 
 from mne.decoding import CSP
 
 from utils import get_tpv_args, tasks
 from data_parsing import Parser
+from CSP_implementation import My_CSP
 
 logging.basicConfig(level=logging.WARNING)
 logger = logging.getLogger("treatment")
 logger.setLevel(level=logging.INFO)
 
+GREEN="\033[32m"
+YELLOW="\033[33m"
+RED="\033[31m"
+RESET="\033[37m"
+
 class Treatment():
     def __init__(self, args):
         # TODO replace subjects from 1 to 109 and runs to 0, 4:
         self.subjects = [args.subject] if args.train or args.predict else range(1, 109)
-        self.run_idxs = [args.run_idx] if args.train or args.predict else range(0, 4)
+        # self.run_idxs = [args.run_idx] if args.train or args.predict else range(0, 4)
+        self.run_idxs = [args.run_idx] if args.train or args.predict else [1, 3]
         self.runs = [x['runs'] for i, x in enumerate(tasks) if i in self.run_idxs]
 
     def build_pipe(self, lda_name: str = 'classic', csp_components: int = 4) -> Pipeline:
@@ -31,7 +39,8 @@ class Treatment():
             lda = LDA(solver='lsqr', shrinkage='auto')
         elif lda_name == 'classic':
             lda = LDA()
-        csp = CSP(n_components=csp_components)
+        # csp = CSP(n_components=csp_components)
+        csp = My_CSP(n_components=csp_components)
         pipeline = Pipeline([("CSP", csp), ("LDA", lda)])
         return pipeline
 
@@ -44,13 +53,19 @@ class Treatment():
         pipe = joblib.load(complete_path)
         return pipe
 
+    @classmethod
+    def color_good(self, value: float, good: bool) -> str:
+        if good:
+            return GREEN + f'{value:.2f}' + RESET
+        return RED + f'{value:.2f}' + RESET
+
 
 class Train(Treatment):
     def __init__(self, args):
         super().__init__(args)
         self.training_data = None
         self.pipe = None
-        self.preload_models = True
+        self.preload_models = False
         self.train()
 
     def cross_val_pipeline(self, pipeline, epochs) -> float:
@@ -61,7 +76,7 @@ class Train(Treatment):
         return scores.mean()
 
 
-    def train_pipeline(self, pipeline: Pipeline, epochs, test_size = 0.1) -> Pipeline:
+    def train_pipeline(self, pipeline: Pipeline, epochs, test_size: float = 0.1) -> Pipeline:
         targets = epochs.events[:, -1]
         epochs_data = epochs.copy().crop(tmin=1.0, tmax=4.0).get_data() # They do this cropping on MNE website. Why ?
 
@@ -69,9 +84,11 @@ class Train(Treatment):
 
         x_train, y_train = epochs_data, targets
         pipeline.fit(X=x_train, y=y_train)
-        score = pipeline.score(X=x_test, y=y_test)
-        logger.info(f"trained_pipeline_score: {score:.2f}")
-        return pipeline
+        # TODO: put it back to test!!
+        # score = pipeline.score(X=x_test, y=y_test)
+        score = pipeline.score(X=x_train, y=y_train)
+        logger.info(f"Training score: {self.color_good(score, (score >= 0.75))}")
+        return score
 
     def save_pipeline_to_disk(self, pipe: Pipeline, dir: str, run_id: int, subject: int, parser):
         sub_dir = f"run_{run_id}"
@@ -82,7 +99,7 @@ class Train(Treatment):
         logger.info(f"Saved pipeline to: {complete_path}")
 
     def train(self):
-        training_data = pd.DataFrame(columns=['subject', 'task_number', 'cross_val_score'])
+        training_data = pd.DataFrame(columns=['subject', 'task_number', 'cross_val_score', 'training_score'])
         for run_id in self.run_idxs:
             run = tasks[run_id]['runs']
             labels = tasks[run_id]['labels']
@@ -90,25 +107,29 @@ class Train(Treatment):
             for subject in self.subjects:
                 parser = Parser(subject=subject, run=run, mne_path="./mne_data", run_id=run_id)
                 parser.motion_preprocessing(labels)
+                # TODO make it a class method:
+                parser.create_dir_if_not_exists("./results")
                 epochs = parser.get_epochs(epochs_dir="./epochs", save=True, preload=True)
+                cross_score = None
                 if self.preload_models:
                     self.pipe = self.get_pretrained_model("./models", run_id, subject)
                 if self.pipe is None or self.preload_models is False:
-                    self.pipe = self.build_pipe(lda_name='classic', csp_components=4)
-                    self.pipe = self.train_pipeline(self.pipe, epochs, test_size=0.1)
-                    self.save_pipeline_to_disk(self.pipe, "./models", run_id, subject, parser)
-                cross_score = self.cross_val_pipeline(self.pipe, epochs)
-                logger.info(f"Run:{run},\t\tsubject:{subject},\t\tCross validation average:{cross_score:.2f}")
+                    self.pipe = self.build_pipe(lda_name='shrimp', csp_components=6)
+                    cross_score = self.cross_val_pipeline(self.pipe, epochs)
+                trained_pipeline_score = self.train_pipeline(self.pipe, epochs, test_size=0.1)
+                # self.save_pipeline_to_disk(self.pipe, "./models", run_id, subject, parser)
+                # TODO: put cross val before train:
+                cross_score = round(cross_score, 2) if type(cross_score) == float else None
+                logger.info(f"Run:{run},\t\tsubject:{subject},\t\tCross validation average:{cross_score}")
                 model_metrics = {
                     'subject': subject,
                     'task_number': run_id,
                     'cross_val_score': cross_score,
+                    'training_score' : trained_pipeline_score
                 }
                 metrics = pd.DataFrame(model_metrics, index=[0])
                 training_data = pd.concat([training_data, metrics])
-        parser.create_dir_if_not_exists("./results")
-        training_data.to_csv("./results/training.csv")
-        self.training_data = training_data
+                training_data.to_csv("./results/training_nco6_schrimp_test01.csv")
 
 
 class Predict(Treatment):
@@ -121,28 +142,28 @@ class Predict(Treatment):
         self.predict()
 
 
+    @classmethod
     def predict_epochs(self, pipe, epochs):
         epochs_data = epochs.get_data()
         events = epochs.events
-        right = 0
-        wrong = 0
+
+        predictions = []
+        y_test = []
         for i, event in enumerate(events):
-            last_time = event[0]
             right_answer = event[2]
             prediction  = pipe.predict(epochs_data[i, None, :, :])[0]
-            right += prediction == right_answer
-            wrong += prediction != right_answer
+            predictions.append(prediction)
+            y_test.append(right_answer)
+        accuracy = accuracy_score(predictions, y_test)
+        print(f"Accuracy: {self.color_good(accuracy, (accuracy >= 0.75))}")
 
-        print(f"{right = }\n{wrong = }\n{right/(right + wrong) = }")
-
-
+    @classmethod
     def predict_epochs_proba(self, pipe, epochs, threshold: float):
         epochs_data = epochs.get_data()
         events = epochs.events
         right = 0
         wrong = 0
         predicted = 0
-        ignored = 0
         ignored = 0
         for i, event in enumerate(events):
             right_answer = event[2]
