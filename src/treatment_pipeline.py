@@ -5,6 +5,7 @@ import pandas as pd
 import os
 import joblib
 import logging
+import time
 
 from sklearn.pipeline import Pipeline
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis as LDA
@@ -157,8 +158,10 @@ class Predict(Treatment):
         for i, event in enumerate(events):
             right_answer = event[2]
             prediction  = pipe.predict(epochs_data[i, None, :, :])[0]
+            print(f"event_id: {i} --> prediction vs right answer: {self.color_good(prediction, (prediction == right_answer))}->{right_answer}")
             predictions.append(prediction)
             y_test.append(right_answer)
+            time.sleep(1)
         accuracy = accuracy_score(predictions, y_test)
         print(f"Accuracy: {self.color_good(accuracy, (accuracy >= 0.75))}")
 
@@ -176,13 +179,18 @@ class Predict(Treatment):
             prediction_distribution = pipe.predict_proba(epochs_data[i, None, :, :])
             if np.max(prediction_distribution) > threshold:
                 prediction = np.argmax(prediction_distribution) + 1
+                print(f"event_id: {i} --> prediction vs right answer: {self.color_good(prediction, (prediction == right_answer))}->{right_answer:.2f}")
                 right += prediction == right_answer
                 wrong += prediction != right_answer
                 predicted += 1
+                time.sleep(1)
             else:
                 ignored += 1
 
-        print(f"{right = }\n{wrong = }\n{right/(right + wrong) = }\n{predicted / (predicted + ignored) = }")
+
+        # print(f"{right = }\n{wrong = }\n{right/(right + wrong) = }\n{predicted / (predicted + ignored) = }")
+        score = right/(right + wrong)
+        print(f"right/(right + wrong) = {self.color_good(score, (score >= 0.75))}")
 
     def predict(self):
         run = tasks[self.run_id]['runs']
