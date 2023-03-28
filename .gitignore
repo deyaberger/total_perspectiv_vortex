@@ -4,6 +4,7 @@ mne_data/*
 **/mne_data/*
 **/epochs/*
 **/models/*
+**/models\ copy/*
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

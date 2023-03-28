@@ -140,6 +140,7 @@ class Parser():
         self.filename = f"S{subject_nb:03d}_epo.fif"
         return f"{self.epochs_dir}/{self.epochs_run_dir}/{self.filename}"
 
+    @classmethod
     def create_dir_if_not_exists(self, dir: str, sub_dir: str = None):
         if not os.path.exists(dir):
             os.mkdir(dir)

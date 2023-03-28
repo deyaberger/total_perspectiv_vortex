@@ -23,12 +23,21 @@ class My_CSP(TransformerMixin, BaseEstimator):
         return np.stack(covariances)
 
     def fit(self, X, y):
-        """Estimate the CSP decomposition on epochs."""
+        """Find the CSP decomposition of epochs.
+
+        1. Calulate Covariance Matrix: a square matrix denoting the covariance of the elements with each other
+        2. Compute Eignenvalues and Eigenvectors: they represent magnitude, or importance.
+            Bigger Eigenvalues correlate with more important directions.
+        3. Select Higher Eigenvalues: if n_components = 10: we select the 10 biggest eigen values
+        """
 
         self._classes = np.unique(y)
 
+        # The covariance matrix is a square matrix denoting the covariance of the elements with each other. The covariance of an element with itself is nothing but just its Variance.
         covariances = self._compute_covariance_matrices(X, y)
+        #  The Eigenvectors of the Covariance matrix we get are Orthogonal to each other and each vector represents a principal axis.
         eigen_values, eigen_vectors = linalg.eigh(covariances[0], covariances.sum(0))
+        # A Higher Eigenvalue corresponds to a higher variability. Hence the principal axis with the higher Eigenvalue will be an axis capturing higher variability in the data.
 
         ix = np.argsort(np.abs(eigen_values - 0.5))[::-1]
         eigen_vectors = eigen_vectors[:, ix]
@@ -43,6 +52,13 @@ class My_CSP(TransformerMixin, BaseEstimator):
         return self
 
     def transform(self, X):
+        """Get Data reduce to lower dimensions.
+
+        To transform the data, we need to do a dot product between the Transpose of the Eigenvector subset
+        and the Transpose of the mean-centered data.
+        - pick_filter: Eigenvector subset
+        - epoch: mean-centered data
+        """
         if not isinstance(X, np.ndarray):
             raise ValueError("X should be of type ndarray (got %s)." % type(X))
         pick_filters = self.filters_[:self.n_components]
@@ -56,5 +72,6 @@ class My_CSP(TransformerMixin, BaseEstimator):
         return X
 
     def fit_transform(self, X, y):
+        """Fit then transform."""
         self.fit(X, y)
         return self.transform(X)
