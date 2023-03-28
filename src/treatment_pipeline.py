@@ -33,14 +33,19 @@ class Treatment():
         # self.run_idxs = [args.run_idx] if args.train or args.predict else range(0, 4)
         self.run_idxs = [args.run_idx] if args.train or args.predict else [1, 3]
         self.runs = [x['runs'] for i, x in enumerate(tasks) if i in self.run_idxs]
+        self.my_own_csp = args.my_csp
 
     def build_pipe(self, lda_name: str = 'classic', csp_components: int = 4) -> Pipeline:
         if (lda_name == 'shrimp'):
             lda = LDA(solver='lsqr', shrinkage='auto')
         elif lda_name == 'classic':
             lda = LDA()
-        # csp = CSP(n_components=csp_components)
-        csp = My_CSP(n_components=csp_components)
+        # TODO: Make sure it works:
+        if self.my_own_csp:
+            print("Using my own CSP")
+            csp = My_CSP(n_components=csp_components)
+        else:
+            csp = CSP(n_components=csp_components)
         pipeline = Pipeline([("CSP", csp), ("LDA", lda)])
         return pipeline
 

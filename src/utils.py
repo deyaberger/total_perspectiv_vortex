@@ -56,4 +56,6 @@ def get_tpv_args():
                         {infos}
                         """,
                         required=('--train' in sys.argv or '--predict' in sys.argv))
+    parser.add_argument("--my_csp", action="store_true",
+                        help="Use my own csp")
     return parser.parse_args()
